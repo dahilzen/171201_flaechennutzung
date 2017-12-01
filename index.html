@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang='en'>
+
+<head>
+    <meta charset='UTF-8'>
+    <meta name="viewport" content="initial-scale=1">
+    <title>Small Multiple Maps</title>
+    <script src='https://d3js.org/d3.v3.min.js'></script>
+    <script src='https://d3js.org/queue.v1.min.js'></script>
+    <style>
+    html,
+    body {
+        font-family: arial, sans;
+        font-size: 14px;
+    }
+
+    #vis {
+        width: 100%;
+    }
+
+    #vis div {
+        position: relative;
+        margin: 0 auto;
+    }
+
+    #vis path {
+        fill: #0F71B0;
+        stroke: #000;
+        stroke-width: 1px;
+    }
+
+    #vis p.legend {
+        width: 100%;
+        text-align: center;
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        font-weight: bold;
+        font-size: 12px;
+    }
+
+    .head {
+        font-weight: bold;
+        text-align: left;
+    }
+
+    .header {
+        padding: 0;
+        margin: 0;
+        height: 8px;
+    }
+    </style>
+</head>
+
+<body>
+    <div id='vis'>
+        <center>
+            <h3 class="header">Anteil der Siedlungs- und Verkehrsfläche an der Bodenfläche insgesamt</h3>
+            <p>Dunklere Farben symbolisieren höhere Anteile oder höheren Zuwachs</p>
+        </center>
+    </div>
+    <script>
+    var Vis = (function(d3) {
+        var geojson;
+        queue()
+            .defer(d3.json, 'gemeinden.json')
+            .defer(d3.json, 'flaechen.json')
+            .await(visualize);
+
+        var margin = { top: 20, right: 20, bottom: 30, left: 20 },
+            width = 360 - margin.left - margin.right,
+            height = 380 - margin.top - margin.bottom;
+
+        var projection = d3.geo.mercator()
+            .scale(18000)
+            .center([9.3576270, 49.2149840]) // centers map at given coordinates
+            .translate([width / 2, height / 2]); // translate map to svg
+        //path generator
+        var path = d3.geo.path().projection(projection);
+        var opacity = d3.scale.linear().domain([0, 100]).range([0.2, 3]);
+
+        function visualize(error, states, data) {
+
+            var visualizationWrapper = d3.select('#vis');
+
+            data.data.forEach(function(data, i) {
+                var wrapper = visualizationWrapper
+                    .append('div')
+                    .style({
+                        width: width + 'px',
+                        height: height + 'px'
+                    });
+
+                createMap(wrapper, states, data)
+            });
+        }
+
+        function createMap(wrapper, geo, data) {
+
+            wrapper.append('p')
+                .text('')
+                .attr('class', 'legend');
+
+            var svg = wrapper.append("svg:svg")
+                .attr("width", width + margin.left + margin.right)
+                .attr("height", height + margin.top + margin.bottom)
+
+            svg.append("text")
+                .attr("class", "head")
+                .attr("text-anchor", "middle")
+                .attr("x", width)
+                .attr("y", 35)
+                .text(function(d) { return data.key });
+
+            svg.selectAll('path')
+                .data(geo.features)
+                .enter()
+                .append('path')
+                .attr('d', path)
+                .style('opacity', function(d) {
+                    var value = data.values[d.properties.AGS];
+                    return opacity(value);
+                })
+                .attr('class', function(d) {
+                    return d.properties.GEN;
+                })
+                .on('mouseenter', function(d, i) {
+                    notify('.' + d.properties.GEN, 'select');
+                })
+                .on('mouseleave', function(d) {
+                    notify('.' + d.properties.GEN, 'unselect')
+                })
+                .on('select', function(self) {
+                    var geoData = self.data();
+                    self.node().parentNode.parentNode.getElementsByClassName('legend')[0].innerHTML = (geoData[0].properties.GEN + '<br>' +
+                        decimalPoint(data.values[geoData[0].properties.AGS]) + ' Prozent').replace('_', '&nbsp;').replace('_', '&nbsp;');
+                })
+                .on('unselect', function(self) {
+                    self.node().parentNode.parentNode.getElementsByClassName('legend')[0].innerHTML = '';
+                })
+
+            function decimalPoint(k) {
+                return d3.format(".")(k).replace(".", ",")
+            };
+
+            function notify(selector, eventName) {
+                d3.selectAll(selector)[0].forEach(function(el, i) {
+                    var shape = d3.select(el);
+                    shape.on(eventName)(shape);
+                });
+            }
+        }
+    })(d3);
+    </script>
+</body>
+
+</html>
